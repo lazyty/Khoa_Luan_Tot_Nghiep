@@ -1,0 +1,24 @@
+[Unit]
+Description=Zabbix Discord Middleware Bot
+Documentation=https://github.com/your-repo
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=zabbixbot
+WorkingDirectory=/opt/zabbix-discord-bot
+EnvironmentFile=/opt/zabbix-discord-bot/.env
+ExecStart=/opt/zabbix-discord-bot/venv/bin/python Bot.py
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=zabbix-discord-bot
+
+# Tự restart nếu crash liên tục (tối đa 5 lần trong 2 phút)
+StartLimitIntervalSec=120
+StartLimitBurst=5
+
+[Install]
+WantedBy=multi-user.target
