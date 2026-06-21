@@ -539,5 +539,3 @@ curl -X POST http://localhost:8081/zabbix-alert \
 - Discord token nên rotate định kỳ tại Discord Developer Portal
 
 ---
-
-*Dự án: KLTN 2025-2026 – UIT*
