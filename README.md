@@ -191,18 +191,24 @@ WEBHOOK_SECRET=your_random_secret_here       # Tạo bằng: openssl rand -hex 2
 
 ### 6.1 Tạo Scripts thực thi trên Agent
 
-Vào **Administration → Scripts → Create script** cho từng mục:
+Vào **Administration → Scripts → Create script** cho từng mục. Hệ thống dùng **nftables** (không phải iptables) và **rc-service** vì agent chạy trên **Alpine Linux** (OpenRC, không có systemd):
 
 | Name | Commands | Execute on |
 |---|---|---|
-| `Block IP` | `sudo iptables -I INPUT -s {$IP} -j DROP && sudo iptables-save` | Zabbix agent |
-| `Unblock IP` | `sudo iptables -D INPUT -s {$IP} -j DROP && sudo iptables-save` | Zabbix agent |
-| `Restart nginx` | `sudo systemctl restart nginx` | Zabbix agent |
-| `Restart sshd` | `sudo systemctl restart sshd` | Zabbix agent |
+| `Block IP` | `nft insert rule inet filter input ip saddr {$BLOCK_IP} drop && conntrack -D -s {$BLOCK_IP} 2>/dev/null; echo OK` | Zabbix agent |
+| `Unblock IP` | `HANDLE=$(nft -a list chain inet filter input \| grep 'ip saddr {$BLOCK_IP} drop' \| awk '{print $NF}') && nft delete rule inet filter input handle $HANDLE && echo OK` | Zabbix agent |
+| `Manual Restart DNS` | `rc-service dnsmasq restart` | Zabbix agent |
+| `Manual Restart HTTP` | `rc-service nginx restart` | Zabbix agent |
+| `Manual Restart SSH` | `rc-service sshd restart` | Zabbix agent |
+| `Restart DNS Service` (Action operation) | `/etc/zabbix/scripts/auto_remediation.sh restart dns` | Zabbix agent |
+| `Restart HTTP Service` (Action operation) | `/etc/zabbix/scripts/auto_remediation.sh restart http` | Zabbix agent |
+| `Restart SSH Service` (Action operation) | `/etc/zabbix/scripts/auto_remediation.sh restart ssh` | Zabbix agent |
 
-Thêm vào sudoers trên mỗi agent (`/etc/sudoers.d/zabbix`):
+> Lưu ý: `Block IP` / `Manual Restart *` là script chạy tay từ Frontend, dùng macro `{$BLOCK_IP}`. Còn `Restart * Service` được gắn vào **Trigger action** để tự động khắc phục sự cố (Auto Remediation), gọi qua script tổng `auto_remediation.sh` đặt tại `/etc/zabbix/scripts/` trên agent — script này nhận tham số `ACTION` (`block_ip` / `unblock_ip` / `restart`) và `TARGET`.
+
+Vì agent chạy bằng tài khoản không phải root, cần quyền `sudo` không mật khẩu cho `nft` và `rc-service`. Thêm vào sudoers trên mỗi agent (`/etc/sudoers.d/zabbix`):
 ```
-zabbix ALL=(ALL) NOPASSWD: /sbin/iptables, /sbin/iptables-save, /bin/systemctl
+zabbix ALL=(ALL) NOPASSWD: /usr/sbin/nft, /sbin/rc-service, /usr/bin/conntrack
 ```
 
 ### 6.2 Tạo Media Type (Webhook Realtime)
@@ -289,7 +295,7 @@ sudo ufw status
 | `/status <host_id>` | Xem CPU, RAM, trạng thái host | `/status 10084` |
 | `/problems [host_id]` | Xem các sự cố đang active | `/problems` hoặc `/problems 10084` |
 | `/restart <host_id> <service>` | Restart dịch vụ trên host | `/restart 10084 nginx` |
-| `/block <host_id> <ip>` | Chặn IP bằng iptables | `/block 10084 203.0.113.45` |
+| `/block <host_id> <ip>` | Chặn IP bằng nftables | `/block 10084 203.0.113.45` |
 | `/unblock <host_id> <ip>` | Gỡ chặn IP | `/unblock 10084 203.0.113.45` |
 
 ### Lấy Host ID
